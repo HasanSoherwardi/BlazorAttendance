@@ -1,0 +1,204 @@
+﻿@page "/NewAttendance_Summary/{id:int}"
+
+@using BlazorAttendance.Models
+@using BlazorAttendance.Services
+@using Microsoft.Extensions.Logging;
+@inject IStudentService StudentService
+@inject IAttendanceService AttendanceService
+@inject ILogger<AttendanceSummary> Logger
+
+
+<h1 class="bg-dark text-white">Attendance Summary</h1>
+
+
+@if (RTable == null)
+{
+    <p><em>There is no records to show...</em></p>
+}
+else
+{
+    <div class="container" style="margin-top:10px">
+
+       
+            <div class="card" style="margin-top: 15px">
+                <div class="card-header">
+                    Student Photo
+
+                </div>
+                <div class="card-body">
+                    <img src="@imgSrc" width="200" height="200" style="border: 1px solid; border-block-color:black" />
+                </div>
+                <div class="card-footer">
+                
+                
+                    <div class="form-group">
+                        <label>Student Name: </label>
+                    <input readonly="true" class="form-control" @bind="Name">
+
+                    </div>
+
+                    <div class="form-group">
+                        <label>Roll No: </label>
+                    <input readonly="true" class="form-control" @bind="RollNo">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Parents Mobile: </label>
+                    <input readonly="true" class="form-control" @bind="Mobile">
+                    </div>
+                </div>
+
+            </div>
+        <div class="container" style="margin-top:10px">
+            <div class="form-group">
+                <label class="text-primary">Total Records: @TotCount </label>
+            </div>
+            <div class="form-group">
+                <label class="text-success">Total Present: @TotPresent </label>
+            </div>
+            <div class="form-group">
+                <label class="text-danger">Total Absent: @TotAbsent </label>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="table-responsive">
+
+        <table class="table">
+            <thead>
+                <tr>
+                    
+                    <th>Attendance Date</th>
+                    <th>Attendance</th>
+
+                </tr>
+            </thead>
+            <tbody>
+
+                @foreach (var att in attendance)
+                {
+                    <tr>
+                        
+                        <td>@att.attDate.ToShortDateString()</td>
+
+                        <td style="@(att.Stdattendence.Equals("Present") ? "Color: Green" : "Color: Red")">@att.Stdattendence</td>
+
+                        <td>
+                            <button type="submit" @onclick="@(()=> DeleteAttendance(att))" class="btn btn-danger">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+}
+
+
+
+
+@code {
+    [Parameter]
+    public int id { get; set; }
+    private List<Attendance> attendance; 
+    private List<RelationalTable> RTable;
+
+    private int StdId;
+    private string Name;
+    private string RollNo;
+    private string Mobile;
+
+    private string imgSrc = null;
+    private byte[] _fileBytes = null;
+    IBrowserFile selectedFiles;
+
+    private string TotCount;
+    private string TotPresent;
+    private string TotAbsent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if(id > 0)
+        {
+            // students = await StudentService.GetStudentByID(id);
+            attendance = await AttendanceService.GetAttendanceByID(id);
+
+            RTable = await AttendanceService.GetRelationData(id);
+            TotCount = attendance.Count.ToString();
+            TotPresent = attendance.Where(i => i.Stdattendence.ToLower().Contains("present")).Count().ToString();
+            TotAbsent = attendance.Where(i => i.Stdattendence.ToLower().Contains("absent")).Count().ToString();
+
+            var record = RTable.FirstOrDefault();
+            if (record != null)
+            {
+                StdId = record.id;
+                Name = record.Name;
+                RollNo = record.RollNo;
+                Mobile = record.Mobile;
+
+
+                if (record.myArray != null)
+                {
+                    _fileBytes = GetImage(Convert.ToBase64String(record.myArray));
+                    imgSrc = string.Format("data:image/jpg;base64," + Convert.ToBase64String(_fileBytes));
+                }
+                else
+                {
+                    LoadLocalImage();
+                }
+            }
+        }
+
+        
+
+    }
+
+
+    public byte[] GetImage(string sBase64String)
+    {
+        byte[] bytes = null;
+        if (!string.IsNullOrEmpty(sBase64String))
+        {
+            bytes = Convert.FromBase64String(sBase64String);
+        }
+        return bytes;
+    }
+
+    public async void LoadLocalImage()
+    {
+        try
+        {
+
+            using var stream =
+                await FileSystem.OpenAppPackageFileAsync("student.png");
+            using var reader = new StreamReader(stream);
+            byte[] result;
+            using (var streamReader = new MemoryStream())
+            {
+                stream.CopyTo(streamReader);
+                result = streamReader.ToArray();
+            }
+            string imgSrc2 = Convert.ToBase64String(result);
+            imgSrc = string.Format("data:image/png;base64,{0}", imgSrc2);
+        }
+        catch (FileNotFoundException ex)
+        {
+            // dataResourceText = "Data file not found.";
+            Logger.LogError(ex, "'Resource/Raw/student.png' not found.");
+            await App.Current.MainPage.DisplayAlert("Oops",
+        "Something went wrong File not Found", "OK");
+        }
+    }
+    private async void DeleteAttendance(Attendance AttendanceModel)
+    {
+        var response = await AttendanceService.DeleteAttendance(AttendanceModel);
+        if(response > 0)
+        {
+            await OnInitializedAsync();
+            this.StateHasChanged();
+        }
+    }
+
+    
+}

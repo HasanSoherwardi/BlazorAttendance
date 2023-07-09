@@ -1,0 +1,88 @@
+﻿@page "/Attendance_Logs"
+
+@using BlazorAttendance.Data;
+@using BlazorAttendance.Models
+@using BlazorAttendance.Services
+@inject IAttendanceService AttendanceService
+
+
+
+
+<h1>Todays Attendance Logs</h1>
+
+
+@if (attendances == null)
+{
+    <p><em>There is no records to show...</em></p>
+    
+}
+else
+{
+    <div class="container" style="margin-top:10px">
+        
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    
+                    <th>Name</th>
+                    <th>Roll No</th>
+                    <th>Parents Mobile</th>
+                    <th>Attendance Date</th>
+                    <th>Attendance</th>
+                    
+                </tr>
+            </thead>
+            <tbody>
+                 
+                @foreach (var att in attendances)
+                {
+                    <tr>
+                    
+                        
+                        <td>@att.Name</td>
+                        <td>@att.RollNo</td>
+                        <td>@att.Mobile</td>
+                        <td>@att.attDate.ToShortDateString()</td>
+
+                        <td style="@(att.Stdattendence.Equals("Present") ? "Color: Green" : "Color: Red")">@att.Stdattendence</td>
+
+                        <td>
+                            <button type="submit" @onclick="@(()=> DeleteAttendance(att))" class="btn btn-danger">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+}
+
+
+@code {
+    private List<Attendance> attendances;
+    
+    private string imgSrc = null;
+    private byte[] _fileBytes = null;
+    IBrowserFile selectedFiles;
+
+    protected override async Task OnInitializedAsync()
+    {
+        attendances = await AttendanceService.GetAllRecords();
+    
+    }
+
+    
+    private async void DeleteAttendance(Attendance AttendanceModel)
+    {
+        var response = await AttendanceService.DeleteAttendance(AttendanceModel);
+        if (response > 0)
+        {
+            await OnInitializedAsync();
+            this.StateHasChanged();
+        }
+    }
+
+   
+}

@@ -1,0 +1,205 @@
+﻿@page "/add_student"
+@page "/update_student/{id:int}"
+@inject ILogger<AddUpdateStudent> Logger
+
+
+@using BlazorAttendance.Services
+@using BlazorAttendance.Models
+@using Microsoft.Extensions.Logging;
+@inject IStudentService StudentService
+<h3>Insert and Update Student Record</h3>
+
+<div class="container">
+    <EditForm Model=@NewUser OnValidSubmit="@HandleValidSubmit" OnInvalidSubmit="HandleInvalidSubmit">
+        <DataAnnotationsValidator />
+
+<div class="form-group">
+    <label>Student Name</label>
+    <input @bind="NewUser.Name" class="form-control" placeholder="Student Name">
+    <ValidationMessage For="@(() => NewUser.Name)" />
+</div>
+<div class="mt-2 form-group">
+    <label>Roll No</label>
+    <input @bind="NewUser.RollNo" class="form-control" placeholder="Roll No" >
+    <ValidationMessage For="@(() => NewUser.RollNo)" />
+</div>
+
+
+<div class="mt-2 form-group">
+    <label>Parents Mobile No</label>
+    <input @bind="NewUser.Mobile" class="form-control" placeholder="10 digit Parent Mobile No.">
+    <ValidationMessage For="@(() => NewUser.Mobile)" />
+</div>
+
+        <div class="container" style="margin-top:10px">
+
+            <div class="card">
+                <div class="card-header">Select Photo
+                    <InputFile id="MyInputFile" OnChange="OnChangeFile" />
+                </div>
+                <div class="card-body">
+                    <img src="@imgSrc" width="200" height="200" style="border: 1px solid; border-block-color:black" />
+                </div>
+                
+            </div>
+        </div>
+      
+<button type="submit" class="mt-2 btn btn-primary">Submit</button>
+
+</EditForm>
+</div>
+
+@code {
+
+    [Parameter]
+    public int id { get; set; }
+
+
+    private string imgSrc = null;
+    private byte[] _fileBytes = null;
+    IBrowserFile selectedFiles;
+
+    Student NewUser = new Student();
+    bool displayValidationErrorMessages = false;
+    bool displayUserAddedToDB = false;
+
+    private async void HandleValidSubmit(EditContext context)
+    {
+        displayValidationErrorMessages = false;
+        displayUserAddedToDB = true;
+
+
+        var studentModel = new Models.Student
+        {
+           Name = NewUser.Name,
+           RollNo = NewUser.RollNo,
+           Mobile = NewUser.Mobile,
+           id = NewUser.id,
+           myArray = _fileBytes
+        };
+
+        int response = -1;
+        if (NewUser.id > 0)
+        {
+            response = await StudentService.UpdateStudent(studentModel);
+            //update record
+        }
+        else
+        {
+            response = await StudentService.AddStudent(studentModel);
+            //add record
+        }
+
+
+        if (response > 0)
+        {
+            NewUser.Name = NewUser.RollNo = NewUser.Mobile = string.Empty;
+            LoadLocalImage();
+
+            this.StateHasChanged();
+            await App.Current.MainPage.DisplayAlert("Record Saved",
+            "Record Saved To Student Table", "OK");
+        }
+        else
+        {
+            await App.Current.MainPage.DisplayAlert("Oops",
+           "Something went wrong while adding record", "OK");
+        }
+
+
+    }
+    private void HandleInvalidSubmit(EditContext context)
+    {
+        displayValidationErrorMessages = true;
+        displayUserAddedToDB = false;
+
+    } 
+
+    protected async override Task OnInitializedAsync()
+    {
+        try
+        {
+            if (id > 0)
+            {
+
+                var response = await StudentService.GetStudentByID(id);
+                if (response != null)
+                {
+                    NewUser.Name = response.Name;
+                    NewUser.RollNo = response.RollNo;
+                    NewUser.Mobile = response.Mobile;
+                    NewUser.id = response.id;
+                    if (response.myArray != null)
+                    {
+                        _fileBytes = GetImage(Convert.ToBase64String(response.myArray));
+                        imgSrc = string.Format("data:image/jpg;base64," + Convert.ToBase64String(_fileBytes));
+                    }
+                    else
+                    {
+                      LoadLocalImage();
+                    }
+
+                }
+
+            }
+            else
+            {
+                LoadLocalImage();
+            }
+        }
+        catch (Exception ex)
+        {
+            await App.Current.MainPage.DisplayAlert("Oops",
+           ex.Message.ToString(), "OK");
+        }
+
+
+    }
+    public async Task OnChangeFile(InputFileChangeEventArgs e)
+    {
+        var imgFile = e.GetMultipleFiles(e.FileCount);
+        selectedFiles =  imgFile.FirstOrDefault();
+        using (var ms = new MemoryStream())
+        {
+            await e.File.OpenReadStream().CopyToAsync(ms);
+            _fileBytes = ms.ToArray();
+        }
+        var photo = GetImage(Convert.ToBase64String(_fileBytes));
+        imgSrc = string.Format("data:image/jpg;base64,{0}", Convert.ToBase64String(photo));
+    }
+
+    public byte[] GetImage( string sBase64String)
+    {
+        byte[] bytes = null;
+        if (!string.IsNullOrEmpty(sBase64String))
+        {
+            bytes = Convert.FromBase64String(sBase64String);
+        }
+        return bytes;
+    }
+
+    public async void LoadLocalImage()
+    {
+     try {
+
+        using var stream =
+            await FileSystem.OpenAppPackageFileAsync("student.png");
+        using var reader = new StreamReader(stream);
+        byte[] result;
+        using (var streamReader = new MemoryStream())
+        {
+            stream.CopyTo(streamReader);
+            result = streamReader.ToArray();
+        }
+       string imgSrc2 = Convert.ToBase64String(result);
+        imgSrc = string.Format("data:image/png;base64,{0}", imgSrc2);
+    }
+     catch (FileNotFoundException ex)
+    {
+           // dataResourceText = "Data file not found.";
+            Logger.LogError(ex, "'Resource/Raw/student.png' not found.");
+            await App.Current.MainPage.DisplayAlert("Oops",
+        "Something went wrong File not Found", "OK");
+        }
+    }
+}
